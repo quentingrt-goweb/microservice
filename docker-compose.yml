@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  activemq:
+    image: rmohr/activemq:5.15.9
+    ports:
+      - "61616:61616"  # JMS
+      - "61613:61613"  # STOMP
+      - "8161:8161"    # Web Console
+    environment:
+      ACTIVEMQ_ADMIN_LOGIN: admin
+      ACTIVEMQ_ADMIN_PASSWORD: admin
+
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_DB: payment_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  gateway-service:
+    build:
+      context: .
+      dockerfile: gateway-service/Dockerfile
+    depends_on:
+      - activemq
+    environment:
+      - ACTIVEMQ_HOST=activemq
+      - ACTIVEMQ_PORT=61613
+    ports:
+      - "8000:8000"
+
+  card-validation-service:
+    build:
+      context: .
+      dockerfile: card-validation-service/Dockerfile
+    depends_on:
+      - activemq
+    environment:
+      - ACTIVEMQ_HOST=activemq
+      - ACTIVEMQ_PORT=61613
+
+  client-bank-service:
+    build:
+      context: .
+      dockerfile: client-bank-service/Dockerfile
+    depends_on:
+      - activemq
+      - postgres
+    environment:
+      - ACTIVEMQ_HOST=activemq
+      - ACTIVEMQ_PORT=61613
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=payment_db
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+
+  merchant-bank-service:
+    build:
+      context: .
+      dockerfile: merchant-bank-service/Dockerfile
+    depends_on:
+      - activemq
+      - postgres
+    environment:
+      - ACTIVEMQ_HOST=activemq
+      - ACTIVEMQ_PORT=61613
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=payment_db
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: notification-service/Dockerfile
+    depends_on:
+      - activemq
+    environment:
+      - ACTIVEMQ_HOST=activemq
+      - ACTIVEMQ_PORT=61613
+
+volumes:
+  postgres_data: 
